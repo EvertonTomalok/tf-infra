@@ -6,6 +6,7 @@ A base Terraform repository for Google Cloud Platform (GCP) infrastructure provi
 
 - ✅ VPC network with custom subnet configuration
 - ✅ Firewall rules for SSH, HTTP, and HTTPS
+- ✅ Nginx reverse proxy server with auto-configuration
 - ✅ Cloud Functions module for serverless deployments
 - ✅ Modular structure with separate files for variables, outputs, and versions
 - ✅ Ready for production use with remote state backend support
@@ -36,30 +37,43 @@ Or set the `GOOGLE_APPLICATION_CREDENTIALS` environment variable to point to a s
    cd tf-infra
    ```
 
-2. **Configure your variables**:
+2. **Navigate to the project directory**:
    ```bash
-   cp terraform.tfvars.example terraform.tfvars
-   # Edit terraform.tfvars with your values
+   cd projects/dev
    ```
 
-3. **Initialize Terraform**:
+3. **Configure your variables**:
+   Create a `terraform.tfvars` file with your configuration:
+   ```hcl
+   project_id = "your-gcp-project-id"
+   project_name = "my-infra"
+   region = "us-central1"
+   ssh_public_key = "ssh-rsa AAAAB3..." # Optional: for VM SSH access
+   ```
+
+4. **Initialize Terraform**:
    ```bash
    terraform init
    ```
 
-4. **Review the execution plan**:
+5. **Review the execution plan**:
    ```bash
    terraform plan
    ```
 
-5. **Apply the configuration**:
+6. **Apply the configuration**:
    ```bash
    terraform apply
    ```
 
-6. **View outputs**:
+7. **View outputs**:
    ```bash
    terraform output
+   ```
+
+8. **Access your nginx server**:
+   ```bash
+   curl http://$(terraform output -raw nginx_server_external_ip)
    ```
 
 ## Configuration
@@ -73,29 +87,32 @@ Or set the `GOOGLE_APPLICATION_CREDENTIALS` environment variable to point to a s
 - `project_name`: Prefix for resource names (default: "tf-infra")
 - `region`: GCP region (default: "us-central1")
 - `subnet_cidr`: Subnet CIDR block (default: "10.0.1.0/24")
+- `ssh_public_key`: SSH public key for VM access (default: empty)
 
 ## Remote State Backend
 
-To use Google Cloud Storage (GCS) as the backend for remote state:
+This project is configured to use Google Cloud Storage (GCS) as the backend for remote state.
+
+The backend configuration is in `projects/dev/backend.tf`. To customize it:
 
 1. Create a GCS bucket (if you don't have one):
    ```bash
    gsutil mb -p <PROJECT_ID> -l us-central1 gs://<BUCKET_NAME>
    ```
 
-2. Update the backend configuration in `main.tf`:
+2. Update the backend configuration in `projects/dev/backend.tf`:
    ```hcl
    terraform {
      backend "gcs" {
        bucket = "your-terraform-state-bucket"
-       prefix = "terraform/state"
+       prefix = "terraform/state/projects/dev"
      }
    }
    ```
 
-3. Re-initialize Terraform:
+3. Initialize Terraform:
    ```bash
-   terraform init -migrate-state
+   terraform init
    ```
 
 ## Resources Created
@@ -105,6 +122,8 @@ To use Google Cloud Storage (GCS) as the backend for remote state:
 - **Firewall Rules**:
   - SSH access (port 22) from anywhere
   - HTTP/HTTPS access (ports 80, 443) from anywhere
+- **Static External IP**: Reserved public IP for the nginx server
+- **Nginx VM Instance**: Ubuntu 22.04 VM with nginx configured as a reverse proxy to httpbin.org/anything
 
 ## Modules
 
@@ -116,7 +135,13 @@ The `modules/cloud-function` module provides a reusable way to deploy Google Clo
 
 See [modules/cloud-function/README.md](modules/cloud-function/README.md) for detailed documentation.
 
-#### Basic Usage Example
+## Nginx Proxy Server
+
+The dev environment includes an nginx reverse proxy server that forwards all HTTP traffic to `https://httpbin.org/anything`. This is useful for testing HTTP clients and inspecting request details.
+
+For detailed information about the nginx configuration, see [projects/dev/NGINX_PROXY.md](projects/dev/NGINX_PROXY.md).
+
+### Cloud Function Module Usage
 
 ```hcl
 module "my_function" {
@@ -133,17 +158,33 @@ module "my_function" {
 }
 ```
 
+## Project Structure
+
+```
+tf-infra/
+├── modules/              # Reusable Terraform modules
+│   └── cloud-function/  # Cloud Function module
+├── projects/            # Project-specific configurations
+│   └── dev/            # Development environment
+│       ├── main.tf     # Main infrastructure configuration
+│       ├── backend.tf  # Remote state backend configuration
+│       ├── variables.tf # Variable definitions
+│       ├── outputs.tf  # Output values
+│       └── NGINX_PROXY.md # Nginx proxy documentation
+└── README.md           # This file
+```
+
 ## Extending the Infrastructure
 
 This is a base configuration. You can extend it by adding:
 
-- Cloud Functions (using the provided module)
-- Compute Engine instances
+- Additional Compute Engine instances
 - Cloud SQL databases
 - Cloud Load Balancers
 - Cloud Storage buckets
 - IAM roles and policies
 - Kubernetes Engine clusters
+- Custom Cloud Functions (using the provided module)
 - And much more!
 
 ## Best Practices
@@ -160,7 +201,12 @@ This is a base configuration. You can extend it by adding:
 To destroy all resources:
 
 ```bash
+cd projects/dev
 terraform destroy
 ```
 
-⚠️ **Warning**: This will permanently delete all resources created by this configuration.
+⚠️ **Warning**: This will permanently delete all resources created by this configuration, including:
+- The VPC network and subnet
+- Firewall rules
+- The nginx VM instance
+- The static external IP address

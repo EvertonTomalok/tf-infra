@@ -28,6 +28,22 @@ output "region" {
   value       = var.region
 }
 
+# Nginx server outputs
+output "nginx_server_external_ip" {
+  description = "The external IP address of the nginx server"
+  value       = google_compute_address.nginx_external_ip.address
+}
+
+output "nginx_server_name" {
+  description = "The name of the nginx VM instance"
+  value       = google_compute_instance.nginx_server.name
+}
+
+output "nginx_server_url" {
+  description = "The URL to access the nginx server (proxies to httpbin.org/anything)"
+  value       = "http://${google_compute_address.nginx_external_ip.address}"
+}
+
 # Example: Cloud Function outputs (uncomment when using the Cloud Function module)
 # output "cloud_function_url" {
 #   description = "The URL of the Cloud Function"
