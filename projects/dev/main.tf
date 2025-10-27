@@ -1,5 +1,15 @@
 # Terraform version requirements are in versions.tf
 
+terraform {
+  required_version = ">= 1.13.4"
+  required_providers {
+    google = {
+      source  = "hashicorp/google"
+      version = "~> 7.8.0"
+    }
+  }
+}
+
 provider "google" {
   project = var.project_id
   region  = var.region
@@ -70,7 +80,7 @@ resource "google_compute_instance" "nginx_server" {
   network_interface {
     network    = google_compute_network.vpc.name
     subnetwork = google_compute_subnetwork.subnet.name
-    
+
     access_config {
       nat_ip = google_compute_address.nginx_external_ip.address
     }
