@@ -1,15 +1,3 @@
-# Terraform version requirements are in versions.tf
-
-terraform {
-  required_version = ">= 1.13.4"
-  required_providers {
-    google = {
-      source  = "hashicorp/google"
-      version = "~> 7.8.0"
-    }
-  }
-}
-
 provider "google" {
   project = var.project_id
   region  = var.region
@@ -58,111 +46,83 @@ resource "google_compute_firewall" "allow_http_https" {
 }
 
 # Static external IP address for nginx server
-resource "google_compute_address" "nginx_external_ip" {
-  name   = "${var.project_name}-nginx-external-ip"
+resource "google_compute_address" "server_a_external_ip" {
+  name   = "server-a-nginx-external-ip"
   region = var.region
 }
 
-# nginx VM instance that redirects traffic to httpbin.org/anything
-resource "google_compute_instance" "nginx_server" {
-  name         = "${var.project_name}-nginx"
-  machine_type = "e2-micro"
-  zone         = "${var.region}-a"
+module "server_a" {
+  source = "../../modules/cloud-engine"
 
-  boot_disk {
-    initialize_params {
-      image = "ubuntu-os-cloud/ubuntu-2204-lts"
-      size  = 20
-      type  = "pd-standard"
-    }
+  project_id   = var.project_id
+  project_name = "server-a"
+  nat_ip       = google_compute_address.server_a_external_ip.address
+  network      = google_compute_network.vpc.name
+  subnetwork   = google_compute_subnetwork.subnet.name
+}
+
+resource "google_compute_address" "server_b_external_ip" {
+  name   = "server-b-nginx-external-ip"
+  region = var.region
+}
+
+module "server_b" {
+  source = "../../modules/cloud-engine"
+
+  project_id   = var.project_id
+  project_name = "server-b"
+  nat_ip       = google_compute_address.server_b_external_ip.address
+  network      = google_compute_network.vpc.name
+  subnetwork   = google_compute_subnetwork.subnet.name
+}
+
+# Firewall rule to allow health checks from Google Cloud Load Balancer
+resource "google_compute_firewall" "allow_lb_health_check" {
+  name    = "${var.project_name}-allow-lb-health-check"
+  network = google_compute_network.vpc.name
+
+  allow {
+    protocol = "tcp"
+    ports    = ["80"]
   }
 
-  network_interface {
-    network    = google_compute_network.vpc.name
-    subnetwork = google_compute_subnetwork.subnet.name
+  # Google Cloud Load Balancer health check source ranges
+  source_ranges = ["130.211.0.0/22", "35.191.0.0/16"]
+  target_tags   = ["web-access"]
+}
 
-    access_config {
-      nat_ip = google_compute_address.nginx_external_ip.address
-    }
+# Unmanaged instance group for server_a
+resource "google_compute_instance_group" "instance_group_a" {
+  name      = "${var.project_name}-instance-group-a"
+  zone      = module.server_a.nginx_server_zone
+  instances = [module.server_a.nginx_server_self_link]
+
+  named_port {
+    name = "http"
+    port = 80
   }
+}
 
-  tags = ["web-access", "ssh-access"]
+# Unmanaged instance group for server_b
+resource "google_compute_instance_group" "instance_group_b" {
+  name      = "${var.project_name}-instance-group-b"
+  zone      = module.server_b.nginx_server_zone
+  instances = [module.server_b.nginx_server_self_link]
 
-  metadata_startup_script = <<-EOF
-    #!/bin/bash
-    
-    # Log start
-    echo "Starting nginx configuration..." | sudo tee -a /var/log/startup-script.log
-    
-    # Update system packages with retries
-    for i in 1 2 3; do
-      if sudo apt-get update; then
-        break
-      fi
-      echo "apt-get update attempt $i failed, retrying..." | sudo tee -a /var/log/startup-script.log
-      sleep 5
-    done
-    
-    # Install nginx and curl
-    sudo apt-get install -y nginx curl || echo "Package installation had issues" | sudo tee -a /var/log/startup-script.log
-    
-    # Configure nginx to proxy requests to httpbin.org/anything
-    sudo tee /etc/nginx/sites-available/default > /dev/null <<NGINX_CONFIG
-    server {
-        listen 80;
-        server_name _;
-        
-        # Health check endpoint
-        location /health {
-            access_log off;
-            return 200 "healthy\n";
-            add_header Content-Type text/plain;
-        }
-        
-        location / {
-            proxy_pass https://httpbin.org/anything;
-            proxy_set_header Host httpbin.org;
-            proxy_set_header X-Real-IP \$remote_addr;
-            proxy_set_header X-Forwarded-For \$proxy_add_x_forwarded_for;
-            proxy_set_header X-Forwarded-Proto \$scheme;
-            
-            # Allow larger request bodies
-            client_max_body_size 10M;
-            
-            # Disable buffering for streaming responses
-            proxy_buffering off;
-        }
-    }
-    NGINX_CONFIG
-    
-    # Test nginx configuration
-    if sudo nginx -t; then
-      echo "Nginx configuration is valid" | sudo tee -a /var/log/startup-script.log
-    else
-      echo "Nginx configuration test failed!" | sudo tee -a /var/log/startup-script.log
-      exit 1
-    fi
-    
-    # Enable and restart nginx
-    sudo systemctl enable nginx
-    sudo systemctl restart nginx
-    
-    # Wait a moment and verify nginx is running
-    sleep 2
-    if sudo systemctl is-active --quiet nginx; then
-      echo "Nginx configured and started successfully" | sudo tee -a /var/log/startup-script.log
-    else
-      echo "Nginx failed to start!" | sudo tee -a /var/log/startup-script.log
-      sudo systemctl status nginx | sudo tee -a /var/log/startup-script.log
-      exit 1
-    fi
-  EOF
-
-  metadata = var.ssh_public_key != "" ? {
-    ssh-keys = "ubuntu:${var.ssh_public_key}"
-  } : {}
-
-  service_account {
-    scopes = ["cloud-platform"]
+  named_port {
+    name = "http"
+    port = 80
   }
+}
+
+module "load_balancer" {
+  source = "../../modules/load-balancer"
+
+  project_id          = var.project_id
+  region              = var.region
+  name                = "primary-lb"
+  instance_group_a_id = google_compute_instance_group.instance_group_a.id
+  instance_group_b_id = google_compute_instance_group.instance_group_b.id
+  health_check_path   = "/health"
+  health_check_port   = 80
 }

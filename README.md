@@ -6,8 +6,12 @@ A base Terraform repository for Google Cloud Platform (GCP) infrastructure provi
 
 - ✅ VPC network with custom subnet configuration
 - ✅ Firewall rules for SSH, HTTP, and HTTPS
-- ✅ Nginx reverse proxy server with auto-configuration
+- ✅ High-availability nginx reverse proxy setup with load balancing
+- ✅ Cloud Load Balancer with health checks
+- ✅ Multiple backend servers for redundancy
 - ✅ Cloud Functions module for serverless deployments
+- ✅ Cloud Engine module for VM instances
+- ✅ Load Balancer module for distributed traffic
 - ✅ Modular structure with separate files for variables, outputs, and versions
 - ✅ Ready for production use with remote state backend support
 - ✅ Comprehensive documentation
@@ -71,9 +75,14 @@ Or set the `GOOGLE_APPLICATION_CREDENTIALS` environment variable to point to a s
    terraform output
    ```
 
-8. **Access your nginx server**:
+8. **Access your load-balanced nginx servers**:
    ```bash
-   curl http://$(terraform output -raw nginx_server_external_ip)
+   # Access through the load balancer (recommended)
+   curl $(terraform output -raw load_balancer_url)
+   
+   # Or access individual servers directly
+   curl $(terraform output -raw server_a_url)
+   curl $(terraform output -raw server_b_url)
    ```
 
 ## Configuration
@@ -122,8 +131,14 @@ The backend configuration is in `projects/dev/backend.tf`. To customize it:
 - **Firewall Rules**:
   - SSH access (port 22) from anywhere
   - HTTP/HTTPS access (ports 80, 443) from anywhere
-- **Static External IP**: Reserved public IP for the nginx server
-- **Nginx VM Instance**: Ubuntu 22.04 VM with nginx configured as a reverse proxy to httpbin.org/anything
+  - Load balancer health checks (ports 80)
+- **Static External IPs**: Reserved public IPs for both nginx servers
+- **Instance Groups**: Unmanaged instance groups for each server
+- **Health Checks**: HTTP health checks monitoring `/health` endpoint
+- **Cloud Load Balancer**: HTTP(S) load balancer distributing traffic across backend servers
+- **Backend Service**: Load balancer backend service with utilization-based balancing
+- **Nginx VM Instances** (2x): Ubuntu 22.04 VMs with nginx configured as a reverse proxy to httpbin.org/anything
+  - Each server includes a `/health` endpoint for health checks
 
 ## Modules
 
@@ -135,13 +150,7 @@ The `modules/cloud-function` module provides a reusable way to deploy Google Clo
 
 See [modules/cloud-function/README.md](modules/cloud-function/README.md) for detailed documentation.
 
-## Nginx Proxy Server
-
-The dev environment includes an nginx reverse proxy server that forwards all HTTP traffic to `https://httpbin.org/anything`. This is useful for testing HTTP clients and inspecting request details.
-
-For detailed information about the nginx configuration, see [projects/dev/NGINX_PROXY.md](projects/dev/NGINX_PROXY.md).
-
-### Cloud Function Module Usage
+#### Basic Usage Example
 
 ```hcl
 module "my_function" {
@@ -158,33 +167,55 @@ module "my_function" {
 }
 ```
 
-## Project Structure
+### Cloud Engine Module
 
+The `modules/cloud-engine` module provides a reusable way to deploy Google Compute Engine VM instances with nginx pre-configured as a reverse proxy.
+
+#### Basic Usage Example
+
+```hcl
+module "nginx_server" {
+  source = "./modules/cloud-engine"
+
+  project_id   = var.project_id
+  project_name = "my-server"
+  nat_ip       = google_compute_address.external_ip.address
+  network      = google_compute_network.vpc.name
+  subnetwork   = google_compute_subnetwork.subnet.name
+}
 ```
-tf-infra/
-├── modules/              # Reusable Terraform modules
-│   └── cloud-function/  # Cloud Function module
-├── projects/            # Project-specific configurations
-│   └── dev/            # Development environment
-│       ├── main.tf     # Main infrastructure configuration
-│       ├── backend.tf  # Remote state backend configuration
-│       ├── variables.tf # Variable definitions
-│       ├── outputs.tf  # Output values
-│       └── NGINX_PROXY.md # Nginx proxy documentation
-└── README.md           # This file
+
+### Load Balancer Module
+
+The `modules/load-balancer` module provides a reusable HTTP(S) load balancer with health checks and backend services for high-availability setups.
+
+#### Basic Usage Example
+
+```hcl
+module "load_balancer" {
+  source = "./modules/load-balancer"
+
+  project_id          = var.project_id
+  region              = var.region
+  name                = "my-lb"
+  instance_group_a_id = google_compute_instance_group.group_a.id
+  instance_group_b_id = google_compute_instance_group.group_b.id
+  health_check_path   = "/health"
+  health_check_port   = 80
+}
 ```
 
 ## Extending the Infrastructure
 
 This is a base configuration. You can extend it by adding:
 
-- Additional Compute Engine instances
+- Cloud Functions (using the provided module)
+- Compute Engine instances
 - Cloud SQL databases
 - Cloud Load Balancers
 - Cloud Storage buckets
 - IAM roles and policies
 - Kubernetes Engine clusters
-- Custom Cloud Functions (using the provided module)
 - And much more!
 
 ## Best Practices
@@ -201,12 +232,7 @@ This is a base configuration. You can extend it by adding:
 To destroy all resources:
 
 ```bash
-cd projects/dev
 terraform destroy
 ```
 
-⚠️ **Warning**: This will permanently delete all resources created by this configuration, including:
-- The VPC network and subnet
-- Firewall rules
-- The nginx VM instance
-- The static external IP address
+⚠️ **Warning**: This will permanently delete all resources created by this configuration.

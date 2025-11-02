@@ -28,25 +28,34 @@ output "region" {
   value       = var.region
 }
 
-# Nginx server outputs
-output "nginx_server_external_ip" {
-  description = "The external IP address of the nginx server"
-  value       = google_compute_address.nginx_external_ip.address
-}
-
-output "nginx_server_name" {
+output "server_a_name" {
   description = "The name of the nginx VM instance"
-  value       = google_compute_instance.nginx_server.name
+  value       = module.server_a.nginx_server_name
 }
 
-output "nginx_server_url" {
+output "server_a_url" {
   description = "The URL to access the nginx server (proxies to httpbin.org/anything)"
-  value       = "http://${google_compute_address.nginx_external_ip.address}"
+  value       = "http://${module.server_a.nginx_server_address}"
 }
 
-output "nginx_health_url" {
+output "server_b_name" {
+  description = "The name of the nginx VM instance"
+  value       = module.server_b.nginx_server_name
+}
+
+output "server_b_url" {
   description = "The health check endpoint URL"
-  value       = "http://${google_compute_address.nginx_external_ip.address}/health"
+  value       = "http://${module.server_b.nginx_server_address}"
+}
+
+output "load_balancer_ip" {
+  description = "The IP address of the load balancer"
+  value       = module.load_balancer.load_balancer_ip
+}
+
+output "load_balancer_url" {
+  description = "The URL of the load balancer"
+  value       = module.load_balancer.load_balancer_url
 }
 
 # Example: Cloud Function outputs (uncomment when using the Cloud Function module)

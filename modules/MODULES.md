@@ -6,21 +6,17 @@ This repository follows a modular architecture to promote code reusability and m
 
 ```
 .
-├── main.tf                    # Root module configuration
-├── variables.tf               # Root module variables
-├── outputs.tf                 # Root module outputs
+├── projects/                  # Environment-specific configurations
+│   └── dev/                  # Development environment
+│       ├── main.tf
+│       ├── variables.tf
+│       ├── outputs.tf
+│       └── backend.tf
 ├── modules/                   # Reusable modules
-│   └── cloud-function/        # Cloud Function module
-│       ├── main.tf           # Module resources
-│       ├── variables.tf      # Module variables
-│       ├── outputs.tf        # Module outputs
-│       └── README.md         # Module documentation
-└── examples/                  # Example usage
-    └── cloud-function-demo/  # Complete example
-        ├── main.tf
-        ├── variables.tf
-        ├── outputs.tf
-        └── README.md
+│   ├── cloud-function/        # Cloud Function module
+│   ├── cloud-engine/         # Cloud Engine module
+│   ├── load-balancer/        # Load Balancer module
+│   └── ...
 ```
 
 ## Available Modules
@@ -70,6 +66,63 @@ See [examples/cloud-function-demo/](examples/cloud-function-demo/) for a complet
 - Environment variables and labels
 - Public vs private access
 - Autoscaling configuration
+
+### Cloud Engine Module
+
+The Cloud Engine module (`modules/cloud-engine`) provides a reusable way to deploy Google Compute Engine VM instances with pre-configured nginx as a reverse proxy.
+
+#### Key Features
+
+- Ubuntu 22.04 LTS VM instances
+- Pre-configured nginx reverse proxy
+- Automatic health check endpoint setup
+- Customizable SSH keys
+- Static external IP support
+- VPC and subnet integration
+- Startup script automation
+
+#### Quick Start
+
+```hcl
+module "nginx_server" {
+  source = "./modules/cloud-engine"
+
+  project_id   = var.project_id
+  project_name = "my-server"
+  nat_ip       = google_compute_address.external_ip.address
+  network      = google_compute_network.vpc.name
+  subnetwork   = google_compute_subnetwork.subnet.name
+}
+```
+
+### Load Balancer Module
+
+The Load Balancer module (`modules/load-balancer`) provides a reusable HTTP(S) load balancer with health checks and backend services.
+
+#### Key Features
+
+- HTTP load balancing
+- Health check configuration
+- Multi-backend support
+- Utilization-based load balancing
+- Global forwarding rules
+- Configurable timeouts and thresholds
+
+#### Quick Start
+
+```hcl
+module "load_balancer" {
+  source = "./modules/load-balancer"
+
+  project_id          = var.project_id
+  region              = var.region
+  name                = "my-lb"
+  instance_group_a_id = google_compute_instance_group.group_a.id
+  instance_group_b_id = google_compute_instance_group.group_b.id
+  health_check_path   = "/health"
+  health_check_port   = 80
+}
+```
 
 ## Creating New Modules
 
@@ -127,7 +180,6 @@ Potential modules to add in the future:
 
 - Cloud SQL module
 - Cloud Storage module
-- Load Balancer module
 - Kubernetes module
 - IAM module
 - Monitoring module
