@@ -70,12 +70,12 @@ output "load_balancer_https_url" {
 
 output "dns_zone_name_servers" {
   description = "The nameservers for the DNS zone (update your domain registrar with these)"
-  value       = google_dns_managed_zone.amaodontomedica_zone.name_servers
+  value       = data.google_dns_managed_zone.amaodontomedica_zone.name_servers
 }
 
 output "dns_zone" {
   description = "The DNS zone name"
-  value       = google_dns_managed_zone.amaodontomedica_zone.name
+  value       = data.google_dns_managed_zone.amaodontomedica_zone.name
 }
 
 # Example: Cloud Function outputs (uncomment when using the Cloud Function module)

@@ -92,9 +92,11 @@ resource "google_compute_firewall" "allow_lb_health_check" {
 }
 
 # Single unmanaged instance group containing both server_a and server_b
+# NOTE: Both servers must be in the same zone for unmanaged instance groups with global load balancers
 resource "google_compute_instance_group" "instance_group" {
   name = "${var.project_name}-instance-group"
   zone = module.server_a.nginx_server_zone
+  
   instances = [
     module.server_a.nginx_server_self_link,
     module.server_b.nginx_server_self_link
@@ -104,6 +106,12 @@ resource "google_compute_instance_group" "instance_group" {
     name = "http"
     port = 80
   }
+  
+  # Ensure instances are created before adding them to the group
+  depends_on = [
+    module.server_a,
+    module.server_b
+  ]
 }
 
 # SSL certificate for test.amaodontomedica.com.br
@@ -141,11 +149,10 @@ module "load_balancer" {
   ]
 }
 
-# Cloud DNS Zone for amaodontomedica.com.br (if not already exists in Cloud DNS)
-resource "google_dns_managed_zone" "amaodontomedica_zone" {
-  name        = "amaodontomedica-com-br"
-  dns_name    = "amaodontomedica.com.br."
-  description = "Managed zone for amaodontomedica.com.br domain"
+# Reference existing Cloud DNS Zone for amaodontomedica.com.br (ama-clinica)
+# Using data source to avoid managing/deleting this zone with Terraform
+data "google_dns_managed_zone" "amaodontomedica_zone" {
+  name = "ama-clinica"
 }
 
 # DNS A record for test.amaodontomedica.com.br pointing to load balancer
@@ -154,9 +161,10 @@ resource "google_dns_record_set" "test_subdomain" {
   type = "A"
   ttl  = 30
 
-  managed_zone = google_dns_managed_zone.amaodontomedica_zone.name
+  managed_zone = data.google_dns_managed_zone.amaodontomedica_zone.name
 
-  # Point to the load balancer IP
+  # Point to the load balancer IP (output prefers HTTPS IP when available)
+  # HTTP requests will be automatically redirected to HTTPS
   rrdatas = [module.load_balancer.load_balancer_ip]
 
   depends_on = [module.load_balancer]

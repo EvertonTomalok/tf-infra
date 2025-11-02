@@ -1,6 +1,6 @@
 output "load_balancer_ip" {
-  description = "The IP address of the load balancer"
-  value       = google_compute_global_forwarding_rule.forwarding_rule.ip_address
+  description = "The IP address of the load balancer (prefers HTTPS IP if available)"
+  value       = length(google_compute_global_forwarding_rule.https_forwarding_rule) > 0 ? google_compute_global_forwarding_rule.https_forwarding_rule[0].ip_address : google_compute_global_forwarding_rule.forwarding_rule.ip_address
 }
 
 output "load_balancer_url" {
