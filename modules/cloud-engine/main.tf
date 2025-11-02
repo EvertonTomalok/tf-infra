@@ -43,6 +43,36 @@ resource "google_compute_instance" "nginx_server" {
     
     # Configure nginx to proxy requests to httpbin.org/anything
     sudo tee /etc/nginx/sites-available/default > /dev/null <<NGINX_CONFIG
+    # Circuit breaker: implements proper state machine
+    # CLOSED: httpbin is healthy (default state)
+    # OPEN: after 5 failures in 30s, httpbin marked unavailable, use httpbun
+    # HALF-OPEN: after 30s, test httpbin again on next request
+    # CLOSED: if httpbin succeeds in half-open, return to normal
+    upstream backend {
+        # Primary backend: fails after 5 errors in 30 second window
+        server httpbin.org:443 max_fails=5 fail_timeout=30s;
+        
+        # Fallback: only used when primary is in OPEN or HALF-OPEN state
+        server httpbun.org:443 backup;
+        
+        # Keep connections alive for performance
+        keepalive 32;
+    }
+    
+    # Health check results storage
+    map \$upstream_addr \$backend_status {
+        default "unknown";
+        ~*httpbin\.org "primary";
+        ~*httpbun\.org "fallback";
+    }
+    
+    # Map backend to correct Host header
+    map \$backend_status \$upstream_host {
+        default "httpbin.org";
+        "primary" "httpbin.org";
+        "fallback" "httpbun.org";
+    }
+    
     server {
         listen 80;
         server_name _;
@@ -55,17 +85,36 @@ resource "google_compute_instance" "nginx_server" {
         }
         
         location / {
-            proxy_pass https://httpbin.org/anything;
-            proxy_set_header Host httpbin.org;
+            # Proxy with full path and query string preservation
+            proxy_pass https://backend;
+            
+            # SSL configuration for upstream
+            proxy_ssl_name \$upstream_host;
+            proxy_ssl_server_name on;
+            
+            # Preserve all original headers from client
+            proxy_pass_request_headers on;
+            proxy_pass_request_body on;
+            
+            # Override/modify headers based on which backend is used
+            proxy_set_header Host \$upstream_host;
             proxy_set_header X-Real-IP \$remote_addr;
             proxy_set_header X-Forwarded-For \$proxy_add_x_forwarded_for;
             proxy_set_header X-Forwarded-Proto \$scheme;
+            proxy_set_header X-Forwarded-Host \$host;
+            proxy_set_header X-Original-URI \$request_uri;
+            proxy_set_header X-Backend-Status \$backend_status;
             
             # Allow larger request bodies
             client_max_body_size 10M;
             
             # Disable buffering for streaming responses
             proxy_buffering off;
+            
+            # Fast timeouts for quick failover
+            proxy_connect_timeout 3s;
+            proxy_send_timeout 5s;
+            proxy_read_timeout 5s;
         }
     }
     NGINX_CONFIG

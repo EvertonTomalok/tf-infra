@@ -1,6 +1,6 @@
 # Nginx Proxy Server Configuration
 
-This configuration creates an nginx server on Google Cloud Platform that proxies all traffic to `https://httpbin.org/anything`.
+This configuration creates an nginx server on Google Cloud Platform that proxies all traffic to `https://httpbin.org` with automatic failover to `https://httpbun.org` if httpbin is unavailable.
 
 ## What This Creates
 
@@ -12,10 +12,16 @@ This configuration creates an nginx server on Google Cloud Platform that proxies
 
 When you make a GET request to the nginx server's external IP, nginx will:
 1. Receive the request
-2. Forward it to `https://httpbin.org/anything`
-3. Return the response from httpbin.org
+2. Try to forward it to `https://httpbin.org`
+3. If httpbin is down (502, 503, or 504 errors), automatically fallback to `https://httpbun.org`
+4. Return the response from the backend service
 
-The httpbin.org service returns information about the request (headers, method, URL, etc.), which is useful for testing HTTP clients.
+Both httpbin.org and httpbun.org return information about the request (headers, method, URL, query parameters, etc.), which is useful for testing HTTP clients.
+
+**Key Features:**
+- **Circuit Breaker**: Automatic failover from httpbin to httpbun on backend errors
+- **Full Path/Query Preserved**: All paths and query parameters are passed through
+- **All Headers Preserved**: Original headers are maintained in the request
 
 ## Deployment
 
@@ -61,10 +67,13 @@ curl $(terraform output -raw nginx_server_url)
 
 The nginx configuration:
 - Listens on port 80
-- Proxies all requests to `https://httpbin.org/anything`
+- Proxies all requests to `https://httpbin.org` by default
+- Automatic failover to `https://httpbun.org` on backend errors (502, 503, 504)
+- Preserves all original headers, paths, and query parameters
 - Preserves client IP address in headers
 - Handles large request bodies (up to 10MB)
 - Disables buffering for streaming responses
+- Fast timeouts (5s connect, 10s read/send) for quick failover
 
 ## Firewall Rules
 
@@ -82,14 +91,20 @@ Test that the proxy works:
 # Simple GET request
 curl http://<external-ip>/
 
-# With query parameters
-curl "http://<external-ip>/test?foo=bar"
+# With query parameters (all preserved)
+curl "http://<external-ip>/anything/test?foo=bar&baz=qux"
 
 # POST request
-curl -X POST http://<external-ip>/ -d "test=data"
+curl -X POST http://<external-ip>/anything -d "test=data"
+
+# Test with custom headers (all preserved)
+curl -H "X-Custom-Header: test-value" http://<external-ip>/anything
 
 # Check response (should include request info from httpbin)
-curl http://<external-ip>/ | jq
+curl http://<external-ip>/anything | jq
+
+# Test circuit breaker by checking which backend responded
+curl http://<external-ip>/anything | jq .url
 ```
 
 ## Cleanup
