@@ -13,7 +13,7 @@ This configuration creates an nginx server on Google Cloud Platform that proxies
 When you make a GET request to the nginx server's external IP, nginx will:
 1. Receive the request
 2. Try to forward it to `https://httpbin.org`
-3. If httpbin is down (502, 503, or 504 errors), automatically fallback to `https://httpbun.org`
+3. If httpbin is down (500, 501, 502, 503, or 504 errors), automatically fallback to `https://httpbun.org`
 4. Return the response from the backend service
 
 Both httpbin.org and httpbun.org return information about the request (headers, method, URL, query parameters, etc.), which is useful for testing HTTP clients.

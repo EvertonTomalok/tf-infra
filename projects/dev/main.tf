@@ -137,4 +137,10 @@ module "load_balancer" {
   }
   health_check_path = "/health"
   health_check_port = 80
+  depends_on = [
+    module.server_a,
+    module.server_b,
+    google_compute_instance_group.instance_group_a, 
+    google_compute_instance_group.instance_group_b,
+  ]
 }
