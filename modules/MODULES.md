@@ -7,11 +7,6 @@ This repository follows a modular architecture to promote code reusability and m
 ```
 .
 ├── projects/                  # Environment-specific configurations
-│   └── dev/                  # Development environment
-│       ├── main.tf
-│       ├── variables.tf
-│       ├── outputs.tf
-│       └── backend.tf
 ├── modules/                   # Reusable modules
 │   ├── cloud-function/        # Cloud Function module
 │   ├── cloud-engine/         # Cloud Engine module

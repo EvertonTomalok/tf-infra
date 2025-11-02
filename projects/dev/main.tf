@@ -91,23 +91,14 @@ resource "google_compute_firewall" "allow_lb_health_check" {
   target_tags   = ["web-access"]
 }
 
-# Unmanaged instance group for server_a
-resource "google_compute_instance_group" "instance_group_a" {
-  name      = "${var.project_name}-instance-group-a"
-  zone      = module.server_a.nginx_server_zone
-  instances = [module.server_a.nginx_server_self_link]
-
-  named_port {
-    name = "http"
-    port = 80
-  }
-}
-
-# Unmanaged instance group for server_b
-resource "google_compute_instance_group" "instance_group_b" {
-  name      = "${var.project_name}-instance-group-b"
-  zone      = module.server_b.nginx_server_zone
-  instances = [module.server_b.nginx_server_self_link]
+# Single unmanaged instance group containing both server_a and server_b
+resource "google_compute_instance_group" "instance_group" {
+  name = "${var.project_name}-instance-group"
+  zone = module.server_a.nginx_server_zone
+  instances = [
+    module.server_a.nginx_server_self_link,
+    module.server_b.nginx_server_self_link
+  ]
 
   named_port {
     name = "http"
@@ -118,18 +109,12 @@ resource "google_compute_instance_group" "instance_group_b" {
 module "load_balancer" {
   source = "../../modules/load-balancer"
 
-  project_id        = var.project_id
-  region            = var.region
-  name              = "primary-lb"
+  project_id = var.project_id
+  region     = var.region
+  name       = "primary-lb"
   instance_groups = {
-    server_a = {
-      group           = google_compute_instance_group.instance_group_a.id
-      balancing_mode  = "UTILIZATION"
-      capacity_scaler = 1.0
-      max_utilization = 0.8
-    }
-    server_b = {
-      group           = google_compute_instance_group.instance_group_b.id
+    backend = {
+      group           = google_compute_instance_group.instance_group.id
       balancing_mode  = "UTILIZATION"
       capacity_scaler = 1.0
       max_utilization = 0.8
@@ -140,7 +125,6 @@ module "load_balancer" {
   depends_on = [
     module.server_a,
     module.server_b,
-    google_compute_instance_group.instance_group_a, 
-    google_compute_instance_group.instance_group_b,
+    google_compute_instance_group.instance_group,
   ]
 }
