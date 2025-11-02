@@ -93,6 +93,52 @@ terraform apply
 - **Backend Service**: Configured with health checks
 - **Instance Groups**: One for each server
 - **Forwarding Rule**: Routes global traffic to the backend service
+- **SSL Certificate**: Managed SSL certificate for HTTPS (provisioning takes 10-60 minutes)
+
+### SSL Certificate Provisioning
+
+⚠️ **IMPORTANT**: Google Cloud managed SSL certificates take **10-60 minutes** to provision after deployment. 
+
+**The load balancer will NOT work until the SSL certificate status is ACTIVE.** This is because HTTP requests are automatically redirected to HTTPS, and HTTPS requires the SSL certificate to be active.
+
+#### Check SSL Certificate Status
+
+After running `terraform apply`, check the SSL certificate status:
+
+```bash
+# Check the certificate status
+terraform output ssl_certificate_status
+
+# View detailed status message
+terraform output ssl_certificate_status_message
+
+# Or check directly with gcloud
+gcloud compute ssl-certificates describe amaodontomedica-ssl-cert --format="value(managed.status)"
+```
+
+The certificate will be in one of these states:
+- **`PROVISIONING`**: Certificate is being provisioned (normal, takes 10-60 minutes)
+- **`ACTIVE`**: Certificate is ready and load balancer should work
+- **`PROVISIONING_FAILED`**: Certificate provisioning failed (check DNS records)
+
+#### Troubleshooting Certificate Provisioning
+
+If the certificate is stuck in `PROVISIONING`:
+1. Verify DNS record exists and points to the load balancer IP:
+   ```bash
+   terraform output load_balancer_ip
+   nslookup test.amaodontomedica.com.br
+   ```
+2. Ensure DNS has propagated (check with tools like [whatsmydns.net](https://www.whatsmydns.net/))
+3. Wait up to 60 minutes for provisioning (this is normal)
+
+If the certificate status is `PROVISIONING_FAILED`:
+1. Check certificate details:
+   ```bash
+   gcloud compute ssl-certificates describe amaodontomedica-ssl-cert
+   ```
+2. Verify DNS record is correct and propagated
+3. Check firewall rules allow HTTPS traffic
 
 ## Accessing Your Infrastructure
 
@@ -238,6 +284,9 @@ The configuration provides the following outputs:
 - `load_balancer_ip`: Load balancer IP address (prefers HTTPS IP if SSL configured)
 - `load_balancer_url`: Load balancer HTTP URL
 - `load_balancer_https_url`: Load balancer HTTPS URL (if SSL configured)
+- `ssl_certificate_status`: SSL certificate provisioning status (PROVISIONING, ACTIVE, or PROVISIONING_FAILED)
+- `ssl_certificate_name`: Name of the SSL certificate resource
+- `ssl_certificate_status_message`: Detailed message about SSL certificate provisioning
 
 To view all outputs:
 
@@ -285,6 +334,15 @@ This will remove:
 
 ### Cannot access the load balancer
 
+**First, check if the SSL certificate is active:**
+```bash
+terraform output ssl_certificate_status
+```
+
+If the status is `PROVISIONING`, the load balancer will not work yet. Wait for the certificate to become `ACTIVE` (can take up to 60 minutes).
+
+If the status is `ACTIVE` and the load balancer still doesn't work:
+
 1. Check if instances are running:
    ```bash
    gcloud compute instances list
@@ -298,6 +356,12 @@ This will remove:
 3. Check health check status:
    ```bash
    gcloud compute backend-services get-health <backend-service-name> --global
+   ```
+
+4. Verify DNS record points to the load balancer:
+   ```bash
+   terraform output load_balancer_ip
+   nslookup test.amaodontomedica.com.br
    ```
 
 ### Health checks failing

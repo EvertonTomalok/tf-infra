@@ -78,6 +78,17 @@ output "dns_zone" {
   value       = data.google_dns_managed_zone.amaodontomedica_zone.name
 }
 
+output "ssl_certificate_status" {
+  description = "The provisioning status of the SSL certificate (ACTIVE, PROVISIONING, or PROVISIONING_FAILED). The load balancer will not work until status is ACTIVE. Check manually using the gcloud command."
+  value       = "Use 'gcloud compute ssl-certificates describe ${google_compute_managed_ssl_certificate.ssl_certificate.name} --format=\"value(managed.status)\"' to check status"
+}
+
+# IMPORTANT: SSL certificate provisioning is asynchronous and typically takes 10-60 minutes.
+output "ssl_certificate_name" {
+  description = "The name of the SSL certificate resource"
+  value       = google_compute_managed_ssl_certificate.ssl_certificate.name
+}
+
 # Example: Cloud Function outputs (uncomment when using the Cloud Function module)
 # output "cloud_function_url" {
 #   description = "The URL of the Cloud Function"

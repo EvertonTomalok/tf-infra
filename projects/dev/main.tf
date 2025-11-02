@@ -115,13 +115,21 @@ resource "google_compute_instance_group" "instance_group" {
 }
 
 # SSL certificate for test.amaodontomedica.com.br
+# NOTE: Google Cloud managed SSL certificates take 10-60 minutes to provision.
+# The load balancer will not work until the certificate status is ACTIVE.
+# Check the certificate status using: terraform output ssl_certificate_status
 resource "google_compute_managed_ssl_certificate" "ssl_certificate" {
   name = "amaodontomedica-ssl-cert"
 
   managed {
     domains = ["test.amaodontomedica.com.br"]
   }
+
+  lifecycle {
+    create_before_destroy = true
+  }
 }
+
 
 module "load_balancer" {
   source = "../../modules/load-balancer"
@@ -147,6 +155,10 @@ module "load_balancer" {
     google_compute_instance_group.instance_group,
     google_compute_managed_ssl_certificate.ssl_certificate,
   ]
+  
+  # Note: SSL certificate provisioning is asynchronous and takes 10-60 minutes.
+  # The load balancer may not work until the certificate status becomes ACTIVE.
+  # Check status using: terraform output ssl_certificate_status
 }
 
 # Reference existing Cloud DNS Zone for amaodontomedica.com.br (ama-clinica)
@@ -156,6 +168,9 @@ data "google_dns_managed_zone" "amaodontomedica_zone" {
 }
 
 # DNS A record for test.amaodontomedica.com.br pointing to load balancer
+# IMPORTANT: The DNS record must exist for SSL certificate provisioning to succeed.
+# The SSL certificate will take 10-60 minutes to provision after the DNS record is created.
+# Check the certificate status using: terraform output ssl_certificate_status
 resource "google_dns_record_set" "test_subdomain" {
   name = "test.amaodontomedica.com.br."
   type = "A"
@@ -167,5 +182,8 @@ resource "google_dns_record_set" "test_subdomain" {
   # HTTP requests will be automatically redirected to HTTPS
   rrdatas = [module.load_balancer.load_balancer_ip]
 
-  depends_on = [module.load_balancer]
+  depends_on = [
+    module.load_balancer,
+    google_compute_managed_ssl_certificate.ssl_certificate,
+  ]
 }
