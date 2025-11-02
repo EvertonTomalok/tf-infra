@@ -58,6 +58,26 @@ output "load_balancer_url" {
   value       = module.load_balancer.load_balancer_url
 }
 
+output "load_balancer_https_ip" {
+  description = "The IP address of the HTTPS load balancer"
+  value       = module.load_balancer.https_forwarding_rule_ip
+}
+
+output "load_balancer_https_url" {
+  description = "The HTTPS URL of the load balancer"
+  value       = module.load_balancer.load_balancer_https_url
+}
+
+output "dns_zone_name_servers" {
+  description = "The nameservers for the DNS zone (update your domain registrar with these)"
+  value       = google_dns_managed_zone.amaodontomedica_zone.name_servers
+}
+
+output "dns_zone" {
+  description = "The DNS zone name"
+  value       = google_dns_managed_zone.amaodontomedica_zone.name
+}
+
 # Example: Cloud Function outputs (uncomment when using the Cloud Function module)
 # output "cloud_function_url" {
 #   description = "The URL of the Cloud Function"

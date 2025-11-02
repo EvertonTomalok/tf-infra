@@ -106,6 +106,15 @@ resource "google_compute_instance_group" "instance_group" {
   }
 }
 
+# SSL certificate for test.amaodontomedica.com.br
+resource "google_compute_managed_ssl_certificate" "ssl_certificate" {
+  name = "amaodontomedica-ssl-cert"
+
+  managed {
+    domains = ["test.amaodontomedica.com.br"]
+  }
+}
+
 module "load_balancer" {
   source = "../../modules/load-balancer"
 
@@ -122,9 +131,33 @@ module "load_balancer" {
   }
   health_check_path = "/health"
   health_check_port = 80
+  ssl_certificates  = [google_compute_managed_ssl_certificate.ssl_certificate.id]
+  # Note: test.amaodontomedica.com.br subdomain will use the same backend service
   depends_on = [
     module.server_a,
     module.server_b,
     google_compute_instance_group.instance_group,
+    google_compute_managed_ssl_certificate.ssl_certificate,
   ]
+}
+
+# Cloud DNS Zone for amaodontomedica.com.br (if not already exists in Cloud DNS)
+resource "google_dns_managed_zone" "amaodontomedica_zone" {
+  name        = "amaodontomedica-com-br"
+  dns_name    = "amaodontomedica.com.br."
+  description = "Managed zone for amaodontomedica.com.br domain"
+}
+
+# DNS A record for test.amaodontomedica.com.br pointing to load balancer
+resource "google_dns_record_set" "test_subdomain" {
+  name = "test.amaodontomedica.com.br."
+  type = "A"
+  ttl  = 30
+
+  managed_zone = google_dns_managed_zone.amaodontomedica_zone.name
+
+  # Point to the load balancer IP
+  rrdatas = [module.load_balancer.load_balancer_ip]
+
+  depends_on = [module.load_balancer]
 }

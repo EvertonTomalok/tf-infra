@@ -306,6 +306,226 @@ This will remove:
    gcloud compute backend-services describe <backend-service-name> --global
    ```
 
+## DNS Propagation
+
+When you configure a custom domain name to point to your load balancer or servers, DNS changes need to propagate across DNS servers worldwide. Understanding and checking DNS propagation is crucial for verifying that your DNS records are correctly configured and accessible globally.
+
+### What is DNS Propagation?
+
+DNS propagation is the time it takes for DNS record changes to spread across all DNS servers on the internet. When you create or modify a DNS record (such as an A record pointing to your load balancer IP), the change needs to be cached and distributed to DNS resolvers worldwide. This process can take anywhere from a few minutes to 48 hours, depending on the Time To Live (TTL) value of your DNS records.
+
+### Checking DNS Propagation
+
+There are several methods to check if your DNS records have propagated correctly:
+
+#### Using Command Line Tools
+
+##### Check A Record (IPv4)
+
+```bash
+# Check A record from your local machine
+dig test.amaodontomedica.com.br +short A
+
+# Check A record with detailed information
+dig test.amaodontomedica.com.br A
+
+# Check from a specific DNS server (e.g., Google's DNS)
+dig @8.8.8.8 test.amaodontomedica.com.br A
+
+# Check using nslookup
+nslookup test.amaodontomedica.com.br
+nslookup -type=A test.amaodontomedica.com.br
+```
+
+##### Check AAAA Record (IPv6)
+
+```bash
+dig test.amaodontomedica.com.br AAAA
+nslookup -type=AAAA test.amaodontomedica.com.br
+```
+
+##### Check CNAME Record
+
+```bash
+dig test.amaodontomedica.com.br CNAME
+nslookup -type=CNAME test.amaodontomedica.com.br
+```
+
+##### Check MX Record (Mail Exchange)
+
+```bash
+dig test.amaodontomedica.com.br MX
+nslookup -type=MX test.amaodontomedica.com.br
+```
+
+##### Check TXT Record
+
+```bash
+dig test.amaodontomedica.com.br TXT
+nslookup -type=TXT test.amaodontomedica.com.br
+```
+
+##### Check All Record Types
+
+```bash
+# Get all DNS records for a domain
+dig test.amaodontomedica.com.br ANY
+
+# Using host command
+host test.amaodontomedica.com.br
+host -a test.amaodontomedica.com.br
+```
+
+#### Checking from Multiple Locations
+
+DNS propagation can vary by geographic location. To check propagation globally, you can:
+
+1. **Use different DNS servers** to simulate different locations:
+   ```bash
+   # Google DNS (8.8.8.8, 8.8.4.4)
+   dig @8.8.8.8 test.amaodontomedica.com.br A
+   
+   # Cloudflare DNS (1.1.1.1, 1.0.0.1)
+   dig @1.1.1.1 test.amaodontomedica.com.br A
+   
+   # OpenDNS (208.67.222.222, 208.67.220.220)
+   dig @208.67.222.222 test.amaodontomedica.com.br A
+   
+   # Quad9 (9.9.9.9)
+   dig @9.9.9.9 test.amaodontomedica.com.br A
+   ```
+
+2. **Use online DNS checker tools** that check from multiple locations:
+   - [whatsmydns.net](https://www.whatsmydns.net/)
+   - [dnschecker.org](https://dnschecker.org/)
+   - [dnsmap.io](https://dnsmap.io/)
+
+#### Check Specific Load Balancer IP
+
+If you've configured a domain to point to your load balancer IP:
+
+```bash
+# Get your load balancer IP
+LB_IP=$(terraform output -raw load_balancer_ip)
+echo "Load Balancer IP: $LB_IP"
+
+# Check if domain points to your load balancer IP
+dig test.amaodontomedica.com.br +short A
+
+# Verify the IP matches
+dig test.amaodontomedica.com.br +short A | grep -q "$LB_IP" && echo "DNS points to correct IP" || echo "DNS does not match"
+```
+
+#### Understanding TTL (Time To Live)
+
+TTL determines how long DNS records are cached. Lower TTL values mean faster propagation but more DNS queries:
+
+```bash
+# Check TTL value
+dig test.amaodontomedica.com.br A +noall +answer +ttlid
+
+# Example output shows TTL in seconds:
+# test.amaodontomedica.com.br.  300  IN  A  192.0.2.1
+#                                ^^^
+#                                TTL = 300 seconds (5 minutes)
+```
+
+#### Common DNS Propagation Issues
+
+1. **DNS records not resolving**:
+   ```bash
+   # Check if DNS server can resolve the domain
+   dig test.amaodontomedica.com.br +trace
+   
+   # Check authoritative nameservers
+   dig test.amaodontomedica.com.br NS
+   ```
+
+2. **Cached old DNS records**:
+   - DNS resolvers cache records based on TTL
+   - Wait for TTL to expire or flush local DNS cache:
+     ```bash
+     # macOS
+     sudo dscacheutil -flushcache; sudo killall -HUP mDNSResponder
+     
+     # Linux
+     sudo systemd-resolve --flush-caches
+     
+     # Windows
+     ipconfig /flushdns
+     ```
+
+3. **Verify DNS configuration in GCP**:
+   If using Google Cloud DNS:
+   ```bash
+   # List DNS zones
+   gcloud dns managed-zones list
+   
+   # List DNS records in a zone
+   gcloud dns record-sets list --zone=YOUR_ZONE_NAME
+   
+   # Describe a specific record
+   gcloud dns record-sets describe test.amaodontomedica.com.br. --type=A --zone=YOUR_ZONE_NAME
+   ```
+
+#### Quick DNS Propagation Check Script
+
+Create a simple script to check DNS propagation:
+
+```bash
+#!/bin/bash
+DOMAIN="test.amaodontomedica.com.br"
+EXPECTED_IP=$(terraform output -raw load_balancer_ip)
+
+echo "Checking DNS propagation for $DOMAIN..."
+echo "Expected IP: $EXPECTED_IP"
+echo ""
+
+DNS_SERVERS=(
+    "8.8.8.8:Google"
+    "1.1.1.1:Cloudflare"
+    "208.67.222.222:OpenDNS"
+    "9.9.9.9:Quad9"
+)
+
+for server_info in "${DNS_SERVERS[@]}"; do
+    IFS=':' read -r server_ip server_name <<< "$server_info"
+    result=$(dig @$server_ip $DOMAIN +short A)
+    echo "[$server_name ($server_ip)]: $result"
+    
+    if [[ "$result" == "$EXPECTED_IP" ]]; then
+        echo "  ✓ Match"
+    else
+        echo "  ✗ Mismatch"
+    fi
+    echo ""
+done
+```
+
+### DNS Propagation Best Practices
+
+1. **Set appropriate TTL values**: Lower TTL (300-600 seconds) before making changes, then increase after propagation
+2. **Use multiple DNS servers** to verify propagation globally
+3. **Check both A and AAAA records** if using IPv6
+4. **Monitor DNS propagation** using online tools for global verification
+5. **Wait for full propagation** before switching traffic to new DNS records
+
+### Related Commands
+
+```bash
+# Get all DNS information for troubleshooting
+dig test.amaodontomedica.com.br +noall +answer
+
+# Check DNS propagation with timing information
+time dig test.amaodontomedica.com.br A
+
+# Continuous DNS monitoring
+watch -n 5 'dig test.amaodontomedica.com.br +short A'
+
+# Check if DNS server is responding
+dig @8.8.8.8 test.amaodontomedica.com.br +stats
+```
+
 ## Customization
 
 You can customize this configuration by:

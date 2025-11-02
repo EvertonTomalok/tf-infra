@@ -34,10 +34,34 @@ resource "google_compute_backend_service" "backend_service" {
   }
 }
 
-# URL map
+# URL map with path-based routing
 resource "google_compute_url_map" "url_map" {
   name            = "${var.name}-url-map"
   default_service = google_compute_backend_service.backend_service.id
+
+  dynamic "host_rule" {
+    for_each = length(var.path_routes) > 0 ? [1] : []
+    content {
+      hosts        = ["*"]
+      path_matcher = "${var.name}-path-matcher"
+    }
+  }
+
+  dynamic "path_matcher" {
+    for_each = length(var.path_routes) > 0 ? [1] : []
+    content {
+      name            = "${var.name}-path-matcher"
+      default_service = google_compute_backend_service.backend_service.id
+
+      dynamic "path_rule" {
+        for_each = var.path_routes
+        content {
+          paths   = [path_rule.key]
+          service = path_rule.value.service
+        }
+      }
+    }
+  }
 }
 
 # Target HTTP proxy
@@ -46,11 +70,28 @@ resource "google_compute_target_http_proxy" "http_proxy" {
   url_map = google_compute_url_map.url_map.id
 }
 
-# Global forwarding rule
+# Global forwarding rule for HTTP
 resource "google_compute_global_forwarding_rule" "forwarding_rule" {
   name       = "${var.name}-forwarding-rule"
   target     = google_compute_target_http_proxy.http_proxy.id
   port_range = "80"
   ip_protocol = "TCP"
+}
+
+# Target HTTPS proxy (only created if SSL certificates are provided)
+resource "google_compute_target_https_proxy" "https_proxy" {
+  count            = length(var.ssl_certificates) > 0 ? 1 : 0
+  name             = "${var.name}-https-proxy"
+  url_map          = google_compute_url_map.url_map.id
+  ssl_certificates = var.ssl_certificates
+}
+
+# Global forwarding rule for HTTPS
+resource "google_compute_global_forwarding_rule" "https_forwarding_rule" {
+  count             = length(var.ssl_certificates) > 0 ? 1 : 0
+  name              = "${var.name}-https-forwarding-rule"
+  target            = google_compute_target_https_proxy.https_proxy[0].id
+  port_range        = "443"
+  ip_protocol       = "TCP"
 }
 

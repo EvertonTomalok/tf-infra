@@ -37,3 +37,17 @@ variable "health_check_port" {
   default     = 80
 }
 
+variable "ssl_certificates" {
+  description = "List of SSL certificate self links to use for HTTPS"
+  type        = list(string)
+  default     = []
+}
+
+variable "path_routes" {
+  description = "Map of path patterns to backend services for path-based routing"
+  type = map(object({
+    service = string
+  }))
+  default = {}
+}
+
