@@ -118,11 +118,23 @@ resource "google_compute_instance_group" "instance_group_b" {
 module "load_balancer" {
   source = "../../modules/load-balancer"
 
-  project_id          = var.project_id
-  region              = var.region
-  name                = "primary-lb"
-  instance_group_a_id = google_compute_instance_group.instance_group_a.id
-  instance_group_b_id = google_compute_instance_group.instance_group_b.id
-  health_check_path   = "/health"
-  health_check_port   = 80
+  project_id        = var.project_id
+  region            = var.region
+  name              = "primary-lb"
+  instance_groups = {
+    server_a = {
+      group           = google_compute_instance_group.instance_group_a.id
+      balancing_mode  = "UTILIZATION"
+      capacity_scaler = 1.0
+      max_utilization = 0.8
+    }
+    server_b = {
+      group           = google_compute_instance_group.instance_group_b.id
+      balancing_mode  = "UTILIZATION"
+      capacity_scaler = 1.0
+      max_utilization = 0.8
+    }
+  }
+  health_check_path = "/health"
+  health_check_port = 80
 }

@@ -15,14 +15,14 @@ variable "name" {
   default     = "lb"
 }
 
-variable "instance_group_a_id" {
-  description = "ID of the first instance group (server_a)"
-  type        = string
-}
-
-variable "instance_group_b_id" {
-  description = "ID of the second instance group (server_b)"
-  type        = string
+variable "instance_groups" {
+  description = "Map of instance groups to use as backends"
+  type = map(object({
+    group            = string
+    balancing_mode   = string
+    capacity_scaler  = number
+    max_utilization  = number
+  }))
 }
 
 variable "health_check_path" {

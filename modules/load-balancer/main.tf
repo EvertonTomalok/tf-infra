@@ -23,18 +23,14 @@ resource "google_compute_backend_service" "backend_service" {
 
   health_checks = [google_compute_health_check.backend_health_check.id]
 
-  backend {
-    group                 = var.instance_group_a_id
-    balancing_mode       = "UTILIZATION"
-    capacity_scaler      = 1.0
-    max_utilization       = 0.8
-  }
-
-  backend {
-    group                 = var.instance_group_b_id
-    balancing_mode       = "UTILIZATION"
-    capacity_scaler      = 1.0
-    max_utilization       = 0.8
+  dynamic "backend" {
+    for_each = var.instance_groups
+    content {
+      group           = backend.value.group
+      balancing_mode  = backend.value.balancing_mode
+      capacity_scaler = backend.value.capacity_scaler
+      max_utilization = backend.value.max_utilization
+    }
   }
 }
 
