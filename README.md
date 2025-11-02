@@ -1,5 +1,7 @@
 # Terraform Infrastructure for GCP
 
+> **Note**: This repository is not open to contributions. Please do not submit pull requests.
+
 A base Terraform repository for Google Cloud Platform (GCP) infrastructure provisioning.
 
 ## Features
@@ -142,7 +144,9 @@ The backend configuration is in `projects/dev/backend.tf`. To customize it:
 
 ## Modules
 
-This repository includes reusable modules for common infrastructure patterns.
+This repository includes reusable modules for common infrastructure patterns. All modules follow consistent naming conventions and include comprehensive documentation.
+
+See [modules/MODULES.md](modules/MODULES.md) for an overview of all available modules.
 
 ### Cloud Function Module
 
@@ -169,7 +173,15 @@ module "my_function" {
 
 ### Cloud Engine Module
 
-The `modules/cloud-engine` module provides a reusable way to deploy Google Compute Engine VM instances with nginx pre-configured as a reverse proxy.
+The `modules/cloud-engine` module provides a reusable way to deploy Google Compute Engine VM instances with Ubuntu 22.04 LTS and nginx pre-configured as a reverse proxy. The nginx instance includes a circuit breaker pattern for high availability with automatic failover.
+
+#### Key Features
+
+- Ubuntu 22.04 LTS VM instances
+- Pre-configured nginx reverse proxy with circuit breaker pattern
+- Automatic health check endpoint setup
+- Configurable SSH keys
+- Static external IP support
 
 #### Basic Usage Example
 
@@ -179,15 +191,29 @@ module "nginx_server" {
 
   project_id   = var.project_id
   project_name = "my-server"
+  region       = "us-central1"
   nat_ip       = google_compute_address.external_ip.address
   network      = google_compute_network.vpc.name
   subnetwork   = google_compute_subnetwork.subnet.name
 }
 ```
 
+#### Documentation
+
+See [modules/cloud-engine/README.md](modules/cloud-engine/README.md) for detailed documentation.
+
 ### Load Balancer Module
 
-The `modules/load-balancer` module provides a reusable HTTP(S) load balancer with health checks and backend services for high-availability setups.
+The `modules/load-balancer` module provides a reusable HTTP(S) global load balancer with health checks, backend services, and optional SSL certificate support for high-availability setups.
+
+#### Key Features
+
+- Global HTTP(S) load balancer
+- Optional HTTPS support with SSL certificates
+- Automatic HTTP to HTTPS redirect (when SSL configured)
+- Health checks with configurable path and port
+- Multiple backend instance groups support
+- Utilization-based load balancing
 
 #### Basic Usage Example
 
@@ -195,15 +221,27 @@ The `modules/load-balancer` module provides a reusable HTTP(S) load balancer wit
 module "load_balancer" {
   source = "./modules/load-balancer"
 
-  project_id          = var.project_id
-  region              = var.region
-  name                = "my-lb"
-  instance_group_a_id = google_compute_instance_group.group_a.id
-  instance_group_b_id = google_compute_instance_group.group_b.id
-  health_check_path   = "/health"
-  health_check_port   = 80
+  project_id = var.project_id
+  region     = var.region
+  name       = "my-lb"
+  
+  instance_groups = {
+    backend = {
+      group           = google_compute_instance_group.group.id
+      balancing_mode  = "UTILIZATION"
+      capacity_scaler = 1.0
+      max_utilization = 0.8
+    }
+  }
+  
+  health_check_path = "/health"
+  health_check_port = 80
 }
 ```
+
+#### Documentation
+
+See [modules/load-balancer/README.md](modules/load-balancer/README.md) for detailed documentation.
 
 ## Extending the Infrastructure
 

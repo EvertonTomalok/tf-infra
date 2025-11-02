@@ -1,5 +1,7 @@
 # Nginx Proxy Server Configuration
 
+> **Note**: This repository is not open to contributions. Please do not submit pull requests.
+
 This configuration creates an nginx server on Google Cloud Platform that proxies all traffic to `https://httpbin.org` with automatic failover to `https://httpbun.org` if httpbin is unavailable.
 
 ## What This Creates

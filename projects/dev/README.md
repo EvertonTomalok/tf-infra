@@ -1,5 +1,7 @@
 # Terraform Infrastructure - Development Environment
 
+> **Note**: This repository is not open to contributions. Please do not submit pull requests.
+
 This Terraform configuration deploys a high-availability nginx proxy setup on Google Cloud Platform with a load balancer distributing traffic across two backend servers.
 
 ## Overview
@@ -220,24 +222,47 @@ done
 
 The configuration provides the following outputs:
 
+### Networking
 - `vpc_id`: VPC network ID
 - `vpc_name`: VPC network name
 - `subnet_id`: Subnet ID
 - `subnet_name`: Subnet name
+
+### Compute Instances
 - `server_a_name`: Server A instance name
-- `server_a_url`: Server A URL
+- `server_a_url`: Server A URL (HTTP)
 - `server_b_name`: Server B instance name
-- `server_b_url`: Server B URL
-- `load_balancer_ip`: Load balancer IP address
-- `load_balancer_url`: Load balancer URL
+- `server_b_url`: Server B URL (HTTP)
+
+### Load Balancer
+- `load_balancer_ip`: Load balancer IP address (prefers HTTPS IP if SSL configured)
+- `load_balancer_url`: Load balancer HTTP URL
+- `load_balancer_https_url`: Load balancer HTTPS URL (if SSL configured)
+
+To view all outputs:
+
+```bash
+terraform output
+```
+
+To get a specific output value:
+
+```bash
+terraform output -raw load_balancer_url
+terraform output -raw load_balancer_ip
+```
 
 ## Module Details
 
 This configuration uses the following modules:
-- `cloud-engine`: Creates nginx VM instances (see `modules/cloud-engine/`)
-- `load-balancer`: Creates the global load balancer (see `modules/load-balancer/`)
+- **`cloud-engine`**: Creates nginx VM instances with Ubuntu 22.04 LTS and pre-configured nginx reverse proxy
+  - See [modules/cloud-engine/README.md](../../modules/cloud-engine/README.md) for detailed documentation
+- **`load-balancer`**: Creates the global HTTP(S) load balancer with health checks and optional SSL certificate support
+  - See [modules/load-balancer/README.md](../../modules/load-balancer/README.md) for detailed documentation
 
 For more details about the nginx configuration and proxy setup, see [NGINX_PROXY.md](./NGINX_PROXY.md).
+
+For an overview of all available modules, see [modules/MODULES.md](../../modules/MODULES.md).
 
 ## Cleanup
 

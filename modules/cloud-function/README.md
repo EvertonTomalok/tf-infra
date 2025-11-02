@@ -1,5 +1,7 @@
 # Cloud Function Module
 
+> **Note**: This repository is not open to contributions. Please do not submit pull requests.
+
 This module creates a Google Cloud Function (2nd gen) with HTTP trigger and configurable options.
 
 ## Features
@@ -94,8 +96,8 @@ module "vpc_function" {
 
 | Name | Version |
 |------|---------|
-| terraform | >= 1.0 |
-| google | >= 4.0 |
+| terraform | >= 1.13.4 |
+| google | ~> 7.8.0 |
 
 ## Inputs
 
@@ -108,7 +110,7 @@ module "vpc_function" {
 | project_id | The GCP project ID | `string` | n/a | yes |
 | region | Region where function will be deployed | `string` | n/a | yes |
 | description | Description of the Cloud Function | `string` | `null` | no |
-| runtime | The runtime in which the function will run | `string` | `"python39"` | no |
+| runtime | The runtime in which the function will run | `string` | `"go125"` | no |
 | available_memory_mb | Memory (in MB) available to the function | `number` | `256` | no |
 | timeout | Timeout (in seconds) for the function | `number` | `60` | no |
 | environment_variables | A set of key/value environment variable pairs | `map(string)` | `{}` | no |

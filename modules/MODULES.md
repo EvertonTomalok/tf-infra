@@ -1,5 +1,7 @@
 # Terraform Modules
 
+> **Note**: This repository is not open to contributions. Please do not submit pull requests.
+
 This repository follows a modular architecture to promote code reusability and maintainability.
 
 ## Structure
@@ -52,29 +54,23 @@ module "my_function" {
 
 See [modules/cloud-function/README.md](modules/cloud-function/README.md) for detailed documentation.
 
-#### Example
+#### Example Usage
 
-See [examples/cloud-function-demo/](examples/cloud-function-demo/) for a complete working example that demonstrates:
-
-- Deploying multiple functions
-- Different configuration patterns
-- Environment variables and labels
-- Public vs private access
-- Autoscaling configuration
+See `projects/dev/main.tf` for examples of module usage in a complete infrastructure setup.
 
 ### Cloud Engine Module
 
-The Cloud Engine module (`modules/cloud-engine`) provides a reusable way to deploy Google Compute Engine VM instances with pre-configured nginx as a reverse proxy.
+The Cloud Engine module (`modules/cloud-engine`) provides a reusable way to deploy Google Compute Engine VM instances with Ubuntu 22.04 LTS and pre-configured nginx as a reverse proxy. The nginx instance includes a circuit breaker pattern for high availability with automatic failover between primary and fallback backends.
 
 #### Key Features
 
 - Ubuntu 22.04 LTS VM instances
-- Pre-configured nginx reverse proxy
-- Automatic health check endpoint setup
+- Pre-configured nginx reverse proxy with circuit breaker pattern
+- Automatic health check endpoint setup (`/health`)
 - Customizable SSH keys
 - Static external IP support
 - VPC and subnet integration
-- Startup script automation
+- Startup script automation with comprehensive logging
 
 #### Quick Start
 
@@ -84,24 +80,32 @@ module "nginx_server" {
 
   project_id   = var.project_id
   project_name = "my-server"
+  region       = "us-central1"
   nat_ip       = google_compute_address.external_ip.address
   network      = google_compute_network.vpc.name
   subnetwork   = google_compute_subnetwork.subnet.name
 }
 ```
 
+#### Documentation
+
+See [modules/cloud-engine/README.md](modules/cloud-engine/README.md) for detailed documentation.
+
 ### Load Balancer Module
 
-The Load Balancer module (`modules/load-balancer`) provides a reusable HTTP(S) load balancer with health checks and backend services.
+The Load Balancer module (`modules/load-balancer`) provides a reusable HTTP(S) global load balancer with health checks, backend services, and optional SSL certificate support.
 
 #### Key Features
 
-- HTTP load balancing
-- Health check configuration
-- Multi-backend support
+- Global HTTP(S) load balancer
+- Optional HTTPS support with SSL certificates
+- Automatic HTTP to HTTPS redirect (when SSL configured)
+- Health check configuration with configurable path and port
+- Multi-backend support with multiple instance groups
 - Utilization-based load balancing
-- Global forwarding rules
-- Configurable timeouts and thresholds
+- Path-based routing support
+- Connection draining
+- Configurable capacity scaling
 
 #### Quick Start
 
@@ -109,15 +113,27 @@ The Load Balancer module (`modules/load-balancer`) provides a reusable HTTP(S) l
 module "load_balancer" {
   source = "./modules/load-balancer"
 
-  project_id          = var.project_id
-  region              = var.region
-  name                = "my-lb"
-  instance_group_a_id = google_compute_instance_group.group_a.id
-  instance_group_b_id = google_compute_instance_group.group_b.id
-  health_check_path   = "/health"
-  health_check_port   = 80
+  project_id = var.project_id
+  region     = var.region
+  name       = "my-lb"
+  
+  instance_groups = {
+    backend = {
+      group           = google_compute_instance_group.group.id
+      balancing_mode  = "UTILIZATION"
+      capacity_scaler = 1.0
+      max_utilization = 0.8
+    }
+  }
+  
+  health_check_path = "/health"
+  health_check_port = 80
 }
 ```
+
+#### Documentation
+
+See [modules/load-balancer/README.md](modules/load-balancer/README.md) for detailed documentation.
 
 ## Creating New Modules
 
