@@ -44,6 +44,11 @@ output "nginx_server_url" {
   value       = "http://${google_compute_address.nginx_external_ip.address}"
 }
 
+output "nginx_health_url" {
+  description = "The health check endpoint URL"
+  value       = "http://${google_compute_address.nginx_external_ip.address}/health"
+}
+
 # Example: Cloud Function outputs (uncomment when using the Cloud Function module)
 # output "cloud_function_url" {
 #   description = "The URL of the Cloud Function"

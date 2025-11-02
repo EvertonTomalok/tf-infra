@@ -90,17 +90,34 @@ resource "google_compute_instance" "nginx_server" {
 
   metadata_startup_script = <<-EOF
     #!/bin/bash
-    set -e
     
-    # Update system packages
-    apt-get update
-    apt-get install -y nginx curl
+    # Log start
+    echo "Starting nginx configuration..." | sudo tee -a /var/log/startup-script.log
+    
+    # Update system packages with retries
+    for i in 1 2 3; do
+      if sudo apt-get update; then
+        break
+      fi
+      echo "apt-get update attempt $i failed, retrying..." | sudo tee -a /var/log/startup-script.log
+      sleep 5
+    done
+    
+    # Install nginx and curl
+    sudo apt-get install -y nginx curl || echo "Package installation had issues" | sudo tee -a /var/log/startup-script.log
     
     # Configure nginx to proxy requests to httpbin.org/anything
-    cat > /etc/nginx/sites-available/default <<NGINX_CONFIG
+    sudo tee /etc/nginx/sites-available/default > /dev/null <<NGINX_CONFIG
     server {
         listen 80;
         server_name _;
+        
+        # Health check endpoint
+        location /health {
+            access_log off;
+            return 200 "healthy\n";
+            add_header Content-Type text/plain;
+        }
         
         location / {
             proxy_pass https://httpbin.org/anything;
@@ -118,12 +135,27 @@ resource "google_compute_instance" "nginx_server" {
     }
     NGINX_CONFIG
     
-    # Enable and restart nginx
-    systemctl enable nginx
-    systemctl restart nginx
+    # Test nginx configuration
+    if sudo nginx -t; then
+      echo "Nginx configuration is valid" | sudo tee -a /var/log/startup-script.log
+    else
+      echo "Nginx configuration test failed!" | sudo tee -a /var/log/startup-script.log
+      exit 1
+    fi
     
-    # Log completion
-    echo "Nginx configured and started successfully" >> /var/log/startup-script.log
+    # Enable and restart nginx
+    sudo systemctl enable nginx
+    sudo systemctl restart nginx
+    
+    # Wait a moment and verify nginx is running
+    sleep 2
+    if sudo systemctl is-active --quiet nginx; then
+      echo "Nginx configured and started successfully" | sudo tee -a /var/log/startup-script.log
+    else
+      echo "Nginx failed to start!" | sudo tee -a /var/log/startup-script.log
+      sudo systemctl status nginx | sudo tee -a /var/log/startup-script.log
+      exit 1
+    fi
   EOF
 
   metadata = var.ssh_public_key != "" ? {

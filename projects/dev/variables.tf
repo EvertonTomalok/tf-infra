@@ -12,7 +12,7 @@ variable "project_name" {
 variable "region" {
   description = "The GCP region for resources"
   type        = string
-  default     = "us-east1"
+  default     = "us-central1"
 }
 
 variable "subnet_cidr" {
